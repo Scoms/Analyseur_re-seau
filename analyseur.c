@@ -56,13 +56,13 @@ int main(int argc, char * argv[]){
 		struct bpf_program * fp;
 		bpf_u_int32 netmask;
 		int optimise;
-		if(pcap_compile(listener, fp, filtre, optimise,netmask) != 1){
+
+		if(pcap_compile(listener, fp, filtre, optimise,netmask) != 0){
 			printf("Echec lors de la compilation du filtre\n");
 		}
-		else{
-			if(pcap_setfilter(listener,fp) != 1)
+			if(pcap_setfilter(listener,fp) != 0)
 				printf("Echec lors de l'application du filtre\n");
-		}
+		
 	}
 	pcap_datalink(listener);
     pcap_loop(listener, 2, readPacket, NULL);
