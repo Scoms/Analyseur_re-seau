@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include "reader.h"
 #include "analyseur.h"
+#include <fcntl.h>
 
 #define TRUE 1
 #define FALSE 0
@@ -22,22 +23,26 @@ int verbose;
 
 int main(int argc, char * argv[]){
 
+	//déclarations de variables 
 	char * device, * errbuff;
 	const char * filtre;
+	const char * file;
 	int optch;
 	pcap_t* listener;
 	verbose = 3;
 
+	// format de lecture des paramètres 
     char format[] = "i:v:f:o:";
     device = "";
  
+ 	//boucle de lecture des parmètres
     while ((optch = getopt(argc, argv, format)) != -1)
     switch (optch) {
         case 'i':
 			device = testDevice(optarg);
             break;
         case 'o':
-            printf ("Paramètre o recontré\n");
+        	file = optarg;
             break;
         case 'f':
             filtre = optarg;
@@ -47,31 +52,58 @@ int main(int argc, char * argv[]){
             break;
     }
     //printf("fin du traitement %s %i \n",device,strcmp(device," "));
-    if(strcmp(device," ") == TRUE)
+    //test de la validité du device spécifié
+    if(device == NULL)
     	errorQuit("veuillez définir un interface ou un fichier : ./analyseur -i <interface> || ./analyseur -f <fichier>");
 
-	listener = pcap_open_live(device, BUFSIZ, 1, 1000, errbuff); 
-	if(strcmp(filtre,"") != TRUE){
-		printf("Application du filtre : %s\n",filtre);
-		struct bpf_program * fp;
-		bpf_u_int32 netmask;
-		int optimise;
 
-		if(pcap_compile(listener, fp, filtre, optimise,netmask) != 0){
-			printf("Echec lors de la compilation du filtre\n");
+    // LIVE MODE 
+    if(file == NULL){
+    	printf("--------- LIVE MODE ------------\n");
+    	printf("Lecture sur : %s\n",device);
+    	listener = pcap_open_live(device, BUFSIZ, 1, 1000, errbuff); 
+		pcap_datalink(listener);
+		//test et mise en place du filtre
+	    if(filtre != NULL){
+			printf("Application du filtre : %s\n",filtre);
+			struct bpf_program fp;
+			bpf_u_int32 netmask;
+			int optimise;
+			if(pcap_compile(listener, &fp, filtre, optimise,netmask) != 0){
+				printf("Echec lors de la compilation du filtre\n");
+			}
+			else{
+				if(pcap_setfilter(listener,&fp) != 0){
+						printf("Echec lors de l'application du filtre\n");			
+				}
+				else{
+					printf("Le filtre à été appliqué avec succès !\n");
+				}
+			}
 		}
-			if(pcap_setfilter(listener,fp) != 0)
-				printf("Echec lors de l'application du filtre\n");
-		
-	}
-	pcap_datalink(listener);
-    pcap_loop(listener, 2, readPacket, NULL);
+	    pcap_loop(listener, INFINITY, readPacket, NULL);		
+    }
+
+    // Lecture du fichier 
+    else{
+    	printf("Lecture de : %s\n",file);
+    	int openres = open(file,O_RDONLY);
+    	
+    	// si le fichier nexiste pas 
+    	if(openres == -1)
+    		errorQuit("Le fichier demandé n'existe pas.");
+
+    	listener = pcap_open_offline (file, errbuff);
+		pcap_datalink(listener);
+	    pcap_loop(listener, INFINITY, readPacket, NULL);		
+    }
+    pcap_close(listener);
 	return 0;
 }
 
 void readPacket(u_char *args, const struct pcap_pkthdr* header, const u_char *packet){
 	headerDisplay(header);
-	packetDisplay(packet,header->len,verbose);
+	packetDisplay(header,packet,verbose);
 	printf("\n\n");
 }
 

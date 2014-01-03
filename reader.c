@@ -9,16 +9,18 @@
 #define IP 8
 #define ARP 1544
 #define RARP 56710
+#define BIG 1
+#define SMALL 0
 
 //Protocoles
 #define TCP_PROT 6
 #define UDP_PROT 11
 
 
-void packetDisplay(const u_char *packet,int length,int verbose){
+void packetDisplay(const struct pcap_pkthdr * header,const u_char *packet,int verbose){
 
 	if(verbose == HIG){
-		readU_Char(packet,length,verbose);
+		readU_Char(packet,header->len,BIG);
 	}
 
 	struct ether_header *ethernet;
@@ -29,11 +31,11 @@ void packetDisplay(const u_char *packet,int length,int verbose){
 
 	ethernet = (struct ether_header*)(packet);;
 	int eth_type = readEthernet(ethernet,verbose);
-	//printf("%x\n",eth_type );
+	u_char destPort;
 
 	if(eth_type == IP){
-		ip = (struct ip*)(packet + size_ethernet);
-		readIP(ip,verbose);
+		readIP(header,packet,size_ethernet,verbose);
+		printf("%x\n",destPort);
 	}
 	else if(eth_type == ARP){
 		arp = (struct arp*)(packet + size_ethernet);
@@ -56,13 +58,13 @@ void readARP(struct arp* arp, int verbose){
 		printf("  Hard Prot Len : %x\n",arp->plen);
 		printf("  Ope Code : %i\n",arp->oper);
 		printf("  Sender hardware address :");
-		readU_Char(arp->sha,sizeof(arp->sha),verbose);
+		readU_Char(arp->sha,sizeof(arp->sha),SMALL);
 		printf("  Sender IP address :");
 		ip_address * spa = (ip_address *)arp->spa;
 		printf("%d.%d.%d.%d\n",spa->byte1,spa->byte2,spa->byte3,spa->byte4);
 		//readU_Char(arp->spa,sizeof(arp->spa),verbose);
 		printf("  Target hardware address :");
-		readU_Char(arp->tha,sizeof(arp->tha),verbose);
+		readU_Char(arp->tha,sizeof(arp->tha),SMALL);
 		printf("  Target IP address :");
 		ip_address * tpa = (ip_address *)arp->tpa;
 		printf("%d.%d.%d.%d\n",tpa->byte1,tpa->byte2,tpa->byte3,tpa->byte4);	
@@ -75,10 +77,22 @@ void readARP(struct arp* arp, int verbose){
 	*/
 }
 
-void readU_Char(const u_char * toRead,int length,int verbose){
+// permet d'afficher des u_char proprement
+void readU_Char(const u_char * toRead,int length,int type){
 	int i = 0;
 	for(i=0; i < length; i++){
-		printf("%02x ", (toRead[i])) ;
+
+		if(type == BIG)
+			if(i%16 == 0)
+				printf("\n");
+				
+		printf("%02x", (toRead[i])) ;
+		if(type == SMALL)
+			printf(" ");
+
+		else
+			if(i%2 == 1 && i != 0)
+				printf(" ");
 	}
 	printf("\n");
 }
@@ -105,7 +119,8 @@ int readEthernet(struct ether_header* ethernet,int verbose){
 }
 
 
-void readIP(struct ip* ip,int verbose){
+void readIP(const struct pcap_pkthdr* header,const u_char* packet,int offset,int verbose){
+	struct ip * ip = (struct ip*)(packet + offset);
 	printf("IP : \n");
 	if(verbose == 3){
 		printf("  Version : %x\n",ip->ip_v);	
@@ -128,13 +143,15 @@ void readIP(struct ip* ip,int verbose){
 			printf("  %s\n", "Protocole UDP");
 		}
 	}
-
+	
 	struct tcphdr* tcp;
 	struct udphdr* udp;
 	switch(ip->ip_p){
 		case TCP_PROT:
-			tcp = (struct tcphdr*)(ip + sizeof(ip));
-			readTCP(tcp,verbose);
+			// tcp = (struct tcphdr*)(packet + sizeof(*ip) + offset);
+			// readTCP(tcp,verbose);
+			offset += sizeof(*ip);
+			readTCP(header,packet,offset,verbose);
 			break;
 		case UDP_PROT:
 			udp = (struct udphdr*)(ip + sizeof(ip));
@@ -156,18 +173,48 @@ void readUDP(struct udphdr * udp, int verbose){
 	}
 }
 
-void readTCP(struct tcphdr* tcp,int verbose){
+void readTCP(const struct pcap_pkthdr * header, const u_char * packet,int offset,int verbose){
+	struct tcphdr* tcp= (struct tcphdr*)(packet + offset); 
 	printf("TCP : \n");	
 	if(verbose == 3){
-		printf("  Port dst : %d\n",(tcp->th_sport));	
-		printf("  Port src : %d\n",tcp->th_dport);	
-		printf("  seq : %x\n",tcp->th_seq);	
-		printf("  ack_seq : %x\n",tcp->th_ack);
-		printf("  Window : %x\n",tcp->th_win);	
-		printf("  Checksum : %x\n",tcp->th_sum);	
-		printf("  Urgent pointer : %x\n",tcp->th_urp);	
-		printf("  Flags : %x\n",tcp->th_flags);	
-		printf("  Data Offset : %x\n",tcp->th_off);	
+		printf("  Port src : %d\n",ntohs(tcp->th_sport));
+		printf("  Port dest : %d\n",ntohs(tcp->th_dport));
+		printf("  seq : %d\n",ntohs(tcp->th_seq));	
+		printf("  ack_seq : %d\n",ntohs(tcp->th_ack));
+		printf("  Window : %d\n",ntohs(tcp->th_win));	
+		printf("  Flags : %d\n",ntohs(tcp->th_flags));	
+		printf("  Data Offset : %d\n",ntohs(tcp->th_off));	
+		printf("  Checksum : %d\n",ntohs(tcp->th_sum));	
+		printf("  Urgent pointer : %04x\n",(tcp->th_urp));	
+	}
+
+	int sport =ntohs(tcp->th_sport) ;
+	int dport =ntohs(tcp->th_dport) ;
+	offset += sizeof(*tcp);
+
+	switch(sport){
+		case 80:
+			readApplicatif("HTTP",header,packet,offset,verbose);
+			break;
+		default:
+			switch(dport){
+				case 80:
+					readApplicatif("HTTP",header,packet,offset,verbose);
+					break;
+				default:
+					printf("No matches\n");	
+					break;
+			}
+		break;
+	}
+}
+
+void readApplicatif(char * application,const struct pcap_pkthdr* header,const u_char * packet, int offset, int verbose){
+	printf("%s : \n",application);
+	const u_char * http = (packet + offset);
+	for (int i = 0; i < header->len - offset; ++i)
+	{
+		printf("%c",packet[i]);
 	}
 }
 
