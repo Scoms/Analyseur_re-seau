@@ -104,7 +104,7 @@ int main(int argc, char * argv[]){
 void readPacket(u_char *args, const struct pcap_pkthdr* header, const u_char *packet){
 	headerDisplay(header);
 	packetDisplay(header,packet,verbose);
-	printf("\n\n");
+	//printf("\nexiste");
 }
 
 

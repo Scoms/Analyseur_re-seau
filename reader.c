@@ -16,6 +16,21 @@
 #define TCP_PROT 6
 #define UDP_PROT 11
 
+#define HTTP 80
+#define HTTPS 443
+#define DHCP1 44
+#define DHCP2 43
+#define DNS 53
+#define FTP_ETA 20
+#define FTP_TRANS 21
+#define POP2 109
+#define POP3 110
+#define SMTP 25
+#define IMAP 143
+#define IMAPSSL 993
+#define SCTP 22
+
+
 
 void packetDisplay(const struct pcap_pkthdr * header,const u_char *packet,int verbose){
 
@@ -35,11 +50,12 @@ void packetDisplay(const struct pcap_pkthdr * header,const u_char *packet,int ve
 
 	if(eth_type == IP){
 		readIP(header,packet,size_ethernet,verbose);
-		printf("%x\n",destPort);
+		//printf("%x\n",destPort);
 	}
 	else if(eth_type == ARP){
 		arp = (struct arp*)(packet + size_ethernet);
 		readARP(arp,verbose);
+		//readApplicatif("UNKNOW FOR NOW",header,packet, (sizeof(*arp)+sizeof(*ip)),verbose);		
 	}
 	else if (eth_type == RARP){
 		printf("RARP\n");
@@ -50,8 +66,8 @@ void packetDisplay(const struct pcap_pkthdr * header,const u_char *packet,int ve
 }
 
 void readARP(struct arp* arp, int verbose){
-	printf("ARP\n");
 	if(verbose == 3){
+		printf("ARP\n");
 		printf("  Hard Type : %i\n",arp->htype);
 		printf("  Prot Type : %i\n",arp->ptype);
 		printf("  Hard Add len : %x\n",arp->hlen);
@@ -62,19 +78,28 @@ void readARP(struct arp* arp, int verbose){
 		printf("  Sender IP address :");
 		ip_address * spa = (ip_address *)arp->spa;
 		printf("%d.%d.%d.%d\n",spa->byte1,spa->byte2,spa->byte3,spa->byte4);
-		//readU_Char(arp->spa,sizeof(arp->spa),verbose);
 		printf("  Target hardware address :");
 		readU_Char(arp->tha,sizeof(arp->tha),SMALL);
 		printf("  Target IP address :");
 		ip_address * tpa = (ip_address *)arp->tpa;
 		printf("%d.%d.%d.%d\n",tpa->byte1,tpa->byte2,tpa->byte3,tpa->byte4);	
 	}
-	/*
-	printf("  Sender hardware address : %u\n",arp->sha[6]);
-	printf("  Sender IP address : %x\n",arp->spa[4]);
-	printf("  Target hardware address : %x\n",arp->tha[6]);
-	printf("  Target IP address: %x\n",arp->tpa[4]);
-	*/
+	else if (verbose == MID){
+		printf("ARP\n");
+		printf("  Sender hardware address :");
+		readU_Char(arp->sha,sizeof(arp->sha),SMALL);
+		printf("  Sender IP address :");
+		ip_address * spa = (ip_address *)arp->spa;
+		printf("%d.%d.%d.%d\n",spa->byte1,spa->byte2,spa->byte3,spa->byte4);
+		printf("  Target hardware address :");
+		readU_Char(arp->tha,sizeof(arp->tha),SMALL);
+		printf("  Target IP address :");
+		ip_address * tpa = (ip_address *)arp->tpa;
+		printf("%d.%d.%d.%d\n",tpa->byte1,tpa->byte2,tpa->byte3,tpa->byte4);
+	}
+	else{
+		printf("ARP");
+	}
 }
 
 // permet d'afficher des u_char proprement
@@ -98,21 +123,15 @@ void readU_Char(const u_char * toRead,int length,int type){
 }
 
 int readEthernet(struct ether_header* ethernet,int verbose){
-	printf("\nEthernet : \n");
-	if(verbose == HIG){
+	if(verbose == HIG || verbose == MID){
+		printf("\nEthernet : \n");
 		printf("  Destination : ");
-		readU_Char(ethernet->ether_dhost,sizeof(ethernet->ether_dhost),verbose);
+		readU_Char(ethernet->ether_dhost,sizeof(ethernet->ether_dhost),SMALL);
 		printf("  Source : ");
-		readU_Char(ethernet->ether_shost,sizeof(ethernet->ether_shost),verbose);
-	}
-	if(verbose == MID){
-		printf("  Destination : ");
-		readU_Char(ethernet->ether_dhost,sizeof(ethernet->ether_dhost),verbose);
-		printf("  Source : ");
-		readU_Char(ethernet->ether_shost,sizeof(ethernet->ether_shost),verbose);
+		readU_Char(ethernet->ether_shost,sizeof(ethernet->ether_shost),SMALL);
 	}
 	if(verbose == LOW){
-
+		printf("Ethernet, ");
 	}
 	// printf("%i\n", ethernet->ether_type);
 	return ethernet->ether_type;
@@ -121,8 +140,8 @@ int readEthernet(struct ether_header* ethernet,int verbose){
 
 void readIP(const struct pcap_pkthdr* header,const u_char* packet,int offset,int verbose){
 	struct ip * ip = (struct ip*)(packet + offset);
-	printf("IP : \n");
 	if(verbose == 3){
+		printf("IP : \n");
 		printf("  Version : %x\n",ip->ip_v);	
 		printf("  HL : %x\n",ip->ip_hl);	
 		printf("  Total length : %x\n",ip->ip_len);	
@@ -135,13 +154,11 @@ void readIP(const struct pcap_pkthdr* header,const u_char* packet,int offset,int
 		printf("  IP src : %s\n",inet_ntoa(ip->ip_src));	
 		printf("  IP dest : %s\n",inet_ntoa(ip->ip_dst));	
 	}
-	if(verbose == 2){
-		if(ip->ip_p == TCP_PROT){
-			printf("  %s\n", "Protocole TCP");
-		}
-		else if(ip->ip_p == UDP_PROT){
-			printf("  %s\n", "Protocole UDP");
-		}
+	else if(verbose == 2){
+		printf("IP : \n");
+	}
+	if(verbose == 1){
+		printf("IP, ");
 	}
 	
 	struct tcphdr* tcp;
@@ -156,6 +173,13 @@ void readIP(const struct pcap_pkthdr* header,const u_char* packet,int offset,int
 		case UDP_PROT:
 			udp = (struct udphdr*)(ip + sizeof(ip));
 			readUDP(udp,verbose);
+			offset += sizeof(*udp);
+
+			char * appli = "Applicatif";
+			if(udp->uh_sport == DHCP1 || udp->uh_sport == DHCP2)
+				appli = "DHCP";
+
+			readApplicatif("Applicatif",header,packet,offset,SMALL);
 			break;
 		default:
 			printf("Protocole non traité : %i\n",ip->ip_p);
@@ -164,19 +188,26 @@ void readIP(const struct pcap_pkthdr* header,const u_char* packet,int offset,int
 }
 
 void readUDP(struct udphdr * udp, int verbose){
-	printf("UDP : \n");
 	if(verbose == 3){
+		printf("UDP : \n");
 		printf("Source port : %d\n",udp->uh_sport );
 		printf("Destination port : %d\n",udp->uh_dport );
 		printf("Length : %d\n",udp->uh_ulen );
 		printf("Checksum : %d\n",udp->uh_sum );
 	}
+	else if(verbose == 2){
+		printf("UDP : portdest -> %d , portsrc -> %d\n",udp->uh_dport,udp->uh_sport);
+	}
+	else{
+		printf("UDP, ");
+	}
 }
 
+//Lecture du segment TCP
 void readTCP(const struct pcap_pkthdr * header, const u_char * packet,int offset,int verbose){
 	struct tcphdr* tcp= (struct tcphdr*)(packet + offset); 
-	printf("TCP : \n");	
 	if(verbose == 3){
+		printf("TCP : \n");	
 		printf("  Port src : %d\n",ntohs(tcp->th_sport));
 		printf("  Port dest : %d\n",ntohs(tcp->th_dport));
 		printf("  seq : %d\n",ntohs(tcp->th_seq));	
@@ -187,35 +218,64 @@ void readTCP(const struct pcap_pkthdr * header, const u_char * packet,int offset
 		printf("  Checksum : %d\n",ntohs(tcp->th_sum));	
 		printf("  Urgent pointer : %04x\n",(tcp->th_urp));	
 	}
+	else if(verbose == 2){
+		printf("flag : %d\n",ntohs(tcp->th_flags));
+	}
+	else{
+		printf("TCP, ");
+	}
 
 	int sport =ntohs(tcp->th_sport) ;
 	int dport =ntohs(tcp->th_dport) ;
 	offset += sizeof(*tcp);
 
-	switch(sport){
-		case 80:
-			readApplicatif("HTTP",header,packet,offset,verbose);
-			break;
-		default:
-			switch(dport){
-				case 80:
-					readApplicatif("HTTP",header,packet,offset,verbose);
-					break;
-				default:
-					printf("No matches\n");	
-					break;
-			}
-		break;
+	char * appli = "UNKNOW PROTOCOL";
+
+	if(sport == HTTP || dport == HTTP)
+		appli = "HTTP";
+	else if(sport == HTTPS || dport == HTTPS)
+		appli = "HTTPS";
+	else if(sport == FTP_TRANS || dport == FTP_TRANS)
+		appli = "FTP (transfer)";
+	else if(sport == FTP_ETA || dport == FTP_ETA)
+		appli = "FTP (etablished)";
+	else if(sport == DNS || dport == DNS)
+		appli = "DNS";	
+	else if(sport == SMTP || dport == SMTP)
+		appli = "SMTP";
+	else if(sport == POP2|| dport == POP3)
+		appli = "POP2";
+	else if(sport == POP3|| dport == POP3)
+		appli = "POP3";
+	else if(sport == IMAP || dport == IMAP)
+		appli = "IMAP (2 ou 4)";
+	else if(sport == IMAPSSL || dport == IMAPSSL)
+		appli = "IMAP (ssl)";
+	else if(sport == SCTP || dport == SCTP)
+		appli = "SCTP";
+	
+	if(verbose == 3 || verbose == 2){
+		readApplicatif(appli,header,packet,offset,verbose);
+	}
+	else{
+		printf("%s\n",appli);
 	}
 }
 
 void readApplicatif(char * application,const struct pcap_pkthdr* header,const u_char * packet, int offset, int verbose){
+	printf("\033[1;34m");	
+	printf("\n------------------------ DEBUT APPLCATIF ------------------\n");
+	printf("\033[00m");
 	printf("%s : \n",application);
 	const u_char * http = (packet + offset);
 	for (int i = 0; i < header->len - offset; ++i)
 	{
 		printf("%c",packet[i]);
 	}
+	printf("\033[1;34m");	
+	printf("\n------------------------ FIN APPLCATIF ------------------");
+	printf("\033[00m");
+	printf("\n\n");
 }
 
 void getHour(const struct pcap_pkthdr* header,int verbose){
@@ -231,8 +291,11 @@ void getHour(const struct pcap_pkthdr* header,int verbose){
 	
 	if(verbose == 1)
 		printf("%s\n",buf );
-	else
+	else{
+		printf("\033[31m");
 		printf("Message reçu à %s\n",buf );
+		printf("\033[00m");
+	}
 }
 
 void getHeaderLength(const struct pcap_pkthdr* header,int verbose){
