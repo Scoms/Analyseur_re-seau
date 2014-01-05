@@ -16,6 +16,7 @@
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
 #include <unistd.h>
+#include "bootp.h"
 
 /*IP address*/
 typedef struct ip_address{
@@ -47,6 +48,7 @@ int readEthernet(struct ether_header* ethernet,int verbose);
 void readApplicatif(char * appli,const struct pcap_pkthdr* header, const u_char * packet, int offset, int verbose);
 void printf_notohs(char * text,u_char  * content);
 void readIP(const struct pcap_pkthdr * header, const u_char * packet,int offset,int verbose);
+void readBootP(const struct pcap_pkthdr * header, const u_char * packet, int offset, int verbose);
 void readTCP(const struct pcap_pkthdr * header,const u_char * packet,int offset,int verbose);
 void readUDP(struct udphdr* udp,int verbose);
 void readU_Char(const u_char * toRead,int length,int verbose);

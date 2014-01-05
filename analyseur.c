@@ -33,7 +33,7 @@ int main(int argc, char * argv[]){
 
 	// format de lecture des paramètres 
     char format[] = "i:v:f:o:";
-    device = "";
+    // device = "";
  
  	//boucle de lecture des parmètres
     while ((optch = getopt(argc, argv, format)) != -1)
